@@ -3,7 +3,7 @@ from django.shortcuts import get_object_or_404
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
-from .models import Stock, StockTrendStat, StockChartPoint
+from .models import Stock, StockTrendStat, StockChartPoint, Watchlist
 
 
 def get_price_or_none(stock):
@@ -105,6 +105,37 @@ def search_stocks(request):
             "current_price": float(price.current_price) if price else None,
             "currency": price.currency if price else None,
             "price_change_rate": float(price.change_rate) if price else None,
+        })
+
+    return Response(data)
+
+@api_view(["GET"])
+def watchlist_stocks(request):
+    # 로그인 기능 붙이기 전에는 임시로 트윗량 많은 주식 5개를 관심 주식처럼 보여줌
+    if request.user.is_authenticated:
+        watchlists = Watchlist.objects.filter(user=request.user).select_related("stock")
+        stocks = [item.stock for item in watchlists]
+    else:
+        stats = StockTrendStat.objects.select_related("stock").all()[:5]
+        stocks = [stat.stock for stat in stats]
+
+        if not stocks:
+            stocks = Stock.objects.all()[:5]
+
+    data = []
+
+    for stock in stocks:
+        price = get_price_or_none(stock)
+
+        data.append({
+            "name": stock.name,
+            "ticker": stock.ticker,
+            "market": stock.market,
+            "logo_url": stock.logo_url,
+            "current_price": float(price.current_price) if price else None,
+            "currency": price.currency if price else None,
+            "price_change_rate": float(price.change_rate) if price else None,
+            "price_change_amount": float(price.change_amount) if price else None,
         })
 
     return Response(data)
