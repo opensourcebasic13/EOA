@@ -64,3 +64,19 @@ class Watchlist(models.Model):
 
     def __str__(self):
         return f"{self.user} - {self.stock.ticker}"
+
+class StockTrendStat(models.Model):
+    stock = models.OneToOneField(
+        Stock,
+        on_delete=models.CASCADE,
+        related_name="trend_stat"
+    )
+    tweet_volume = models.BigIntegerField(default=0)
+    one_hour_change_rate = models.DecimalField(max_digits=6, decimal_places=2, default=0)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-tweet_volume"]
+
+    def __str__(self):
+        return f"{self.stock.ticker} - {self.tweet_volume}"
