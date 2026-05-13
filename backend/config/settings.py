@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     # 외부 라이브러리
     "rest_framework",
     "corsheaders",
+    "drf_spectacular",
 
     # 우리가 만든 앱
     "users",
@@ -146,3 +147,12 @@ STATIC_URL = 'static/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 CORS_ALLOW_ALL_ORIGINS = True
+REST_FRAMEWORK = {
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+}
+
+SPECTACULAR_SETTINGS = {
+    "TITLE": "EOA API",
+    "DESCRIPTION": "X 기반 주식 트렌드 분석 서비스 API 문서",
+    "VERSION": "1.0.0",
+}
