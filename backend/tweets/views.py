@@ -4,6 +4,7 @@ from rest_framework.response import Response
 
 from stocks.models import Stock
 from .models import TweetPost
+from .serializers import TweetPostSerializer
 
 
 @api_view(["GET"])
@@ -17,20 +18,6 @@ def hot_tweets(request, ticker):
         "-posted_at"
     )[:10]
 
-    data = [
-        {
-            "author_name": tweet.author_name,
-            "author_handle": tweet.author_handle,
-            "content": tweet.content,
-            "hashtags": tweet.hashtags,
-            "sentiment": tweet.sentiment,
-            "like_count": tweet.like_count,
-            "reply_count": tweet.reply_count,
-            "repost_count": tweet.repost_count,
-            "is_hot": tweet.is_hot,
-            "posted_at": tweet.posted_at,
-        }
-        for tweet in tweets
-    ]
+    serializer = TweetPostSerializer(tweets, many=True)
 
-    return Response(data)
+    return Response(serializer.data)
