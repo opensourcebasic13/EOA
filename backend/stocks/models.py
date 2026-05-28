@@ -80,3 +80,40 @@ class StockTrendStat(models.Model):
 
     def __str__(self):
         return f"{self.stock.ticker} - {self.tweet_volume}"
+
+class StockAiAnalysis(models.Model):
+        SENTIMENT_CHOICES = [
+            ("positive", "긍정"),
+            ("negative", "부정"),
+            ("neutral", "중립"),
+        ]
+
+        stock = models.OneToOneField(
+            Stock,
+            on_delete=models.CASCADE,
+            related_name="ai_analysis"
+        )
+
+        summary = models.TextField(blank=True, null=True)
+        summary_ko = models.TextField(blank=True, null=True)
+
+        main_sentiment = models.CharField(
+            max_length=20,
+            choices=SENTIMENT_CHOICES,
+            default="neutral"
+        )
+
+        positive_score = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+        negative_score = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+        neutral_score = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+
+        keywords = models.JSONField(default=list, blank=True)
+
+        summary_model = models.CharField(max_length=100, default="mT5")
+        sentiment_model = models.CharField(max_length=100, default="FinBERT")
+
+        analyzed_at = models.DateTimeField(auto_now=True)
+
+        def __str__(self):
+            return f"{self.stock.ticker} AI Analysis"
+

@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Stock, StockChartPoint, StockTrendStat
+from .models import Stock, StockChartPoint, StockTrendStat, StockAiAnalysis
 
 
 class StockSummarySerializer(serializers.ModelSerializer):
@@ -133,3 +133,36 @@ class StockChartPointSerializer(serializers.ModelSerializer):
 
     def get_price(self, obj):
         return float(obj.price)
+
+class StockAiAnalysisSerializer(serializers.ModelSerializer):
+    ticker = serializers.CharField(source="stock.ticker", read_only=True)
+    stock_name = serializers.CharField(source="stock.name", read_only=True)
+    sentiment_scores = serializers.SerializerMethodField()
+    model_info = serializers.SerializerMethodField()
+
+    class Meta:
+        model = StockAiAnalysis
+        fields = [
+            "ticker",
+            "stock_name",
+            "summary",
+            "summary_ko",
+            "main_sentiment",
+            "sentiment_scores",
+            "keywords",
+            "model_info",
+            "analyzed_at",
+        ]
+
+    def get_sentiment_scores(self, obj):
+        return {
+            "positive": float(obj.positive_score),
+            "negative": float(obj.negative_score),
+            "neutral": float(obj.neutral_score),
+        }
+
+    def get_model_info(self, obj):
+        return {
+            "summary_model": obj.summary_model,
+            "sentiment_model": obj.sentiment_model,
+        }
