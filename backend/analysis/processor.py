@@ -32,12 +32,25 @@ class EOSAIProcessor:
             "sentiment-analysis",
             model=finbert_model,
             tokenizer=finbert_tokenizer,
-            top_k=None  # 세 라벨 전부 받기
+            top_k=None
         )
 
         print("="*50)
         print("EOA AI ENGINE: 모든 오픈소스 모델 로드 완료.")
         print("="*50 + "\n")
+
+    def _preprocess(self, text: str) -> str:
+        # URL 제거
+        text = re.sub(r'http\S+|www\S+', '', text)
+        # @멘션 제거
+        text = re.sub(r'@\w+', '', text)
+        # #해시태그 제거
+        text = re.sub(r'#\w+', '', text)
+        # 특수문자 제거
+        text = re.sub(r'[^\w\s\.\,\!\?]', '', text)
+        # 연속 공백 정리
+        text = ' '.join(text.split())
+        return text.strip()
 
     def _summarize(self, text: str) -> str:
         input_text = "en " + " ".join(text.split())
@@ -67,7 +80,6 @@ class EOSAIProcessor:
             return ""
 
     def _extract_keywords(self, text: str) -> list:
-        # 불용어 제거 후 빈도 높은 단어 추출
         stopwords = {"the", "a", "an", "is", "are", "was", "were", "has", "have",
                      "had", "be", "been", "being", "in", "on", "at", "to", "for",
                      "of", "and", "or", "but", "as", "with", "its", "it", "this",
@@ -85,13 +97,16 @@ class EOSAIProcessor:
             return {"error": "입력 텍스트가 비어있습니다."}
 
         try:
+            # 전처리 먼저
+            clean_text = self._preprocess(text)
+
             # 요약
-            summary = self._summarize(text).strip() or text
+            summary = self._summarize(clean_text).strip() or clean_text
 
             # 한국어 번역
             summary_ko = self._translate_ko(summary)
 
-            # 감성 분석 (세 라벨 전부)
+            # 감성 분석
             sentiment_results = self.sentiment_analyzer(summary)[0]
             scores_raw = {item["label"].lower(): item["score"] for item in sentiment_results}
 
@@ -126,7 +141,8 @@ class EOSAIProcessor:
 
 
 if __name__ == "__main__":
-    test_tweet = "Tesla stock surges 5% in after-hours trading as strong earnings report beats Wall Street expectations. Investors are optimistic about the company growth outlook."
+    # 노이즈 섞인 실제 트윗 형태로 테스트
+    test_tweet = "🚀 $TSLA surges 5%!! @elonmusk #Tesla #stocks https://t.co/abc123 Strong earnings report beats Wall Street expectations. Investors are optimistic about growth outlook."
 
     processor = EOSAIProcessor()
     result = processor.process(test_tweet, ticker="TSLA")
