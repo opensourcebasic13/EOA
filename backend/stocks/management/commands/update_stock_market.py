@@ -1,3 +1,5 @@
+import time
+
 from django.core.management.base import BaseCommand
 
 from stocks.models import Stock, StockPrice, StockChartPoint
@@ -21,7 +23,44 @@ SUPPORTED_STOCKS = [
 class Command(BaseCommand):
     help = "yfinance를 사용해 해외주식 10개의 현재가와 차트 데이터를 갱신합니다."
 
+    def add_arguments(self, parser):
+        parser.add_argument(
+            "--loop",
+            action="store_true",
+            help="로컬 실행 중 일정 간격으로 주식 데이터를 자동 갱신합니다.",
+        )
+
+        parser.add_argument(
+            "--interval",
+            type=int,
+            default=10,
+            help="자동 갱신 간격입니다. 단위는 분입니다. 기본값은 10분입니다.",
+        )
+
     def handle(self, *args, **options):
+        loop = options["loop"]
+        interval_minutes = options["interval"]
+
+        if loop:
+            self.stdout.write(self.style.SUCCESS(
+                f"주식 데이터 자동 갱신 시작: {interval_minutes}분마다 갱신"
+            ))
+
+            try:
+                while True:
+                    self.update_all_stocks()
+                    self.stdout.write(self.style.SUCCESS(
+                        f"{interval_minutes}분 후 다시 갱신합니다."
+                    ))
+                    time.sleep(interval_minutes * 60)
+
+            except KeyboardInterrupt:
+                self.stdout.write(self.style.WARNING("주식 데이터 자동 갱신을 종료합니다."))
+                return
+
+        self.update_all_stocks()
+
+    def update_all_stocks(self):
         for item in SUPPORTED_STOCKS:
             ticker = item["ticker"]
 
