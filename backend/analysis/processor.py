@@ -40,15 +40,10 @@ class EOSAIProcessor:
         print("="*50 + "\n")
 
     def _preprocess(self, text: str) -> str:
-        # URL 제거
         text = re.sub(r'http\S+|www\S+', '', text)
-        # @멘션 제거
         text = re.sub(r'@\w+', '', text)
-        # #해시태그 제거
         text = re.sub(r'#\w+', '', text)
-        # 특수문자 제거
         text = re.sub(r'[^\w\s\.\,\!\?]', '', text)
-        # 연속 공백 정리
         text = ' '.join(text.split())
         return text.strip()
 
@@ -83,7 +78,7 @@ class EOSAIProcessor:
         stopwords = {"the", "a", "an", "is", "are", "was", "were", "has", "have",
                      "had", "be", "been", "being", "in", "on", "at", "to", "for",
                      "of", "and", "or", "but", "as", "with", "its", "it", "this",
-                     "that", "by", "from", "after", "while", "amid", "after"}
+                     "that", "by", "from", "after", "while", "amid"}
         words = re.findall(r'\b[a-zA-Z]{3,}\b', text.lower())
         filtered = [w for w in words if w not in stopwords]
         freq = {}
@@ -97,16 +92,10 @@ class EOSAIProcessor:
             return {"error": "입력 텍스트가 비어있습니다."}
 
         try:
-            # 전처리 먼저
             clean_text = self._preprocess(text)
-
-            # 요약
             summary = self._summarize(clean_text).strip() or clean_text
-
-            # 한국어 번역
             summary_ko = self._translate_ko(summary)
 
-            # 감성 분석
             sentiment_results = self.sentiment_analyzer(summary)[0]
             scores_raw = {item["label"].lower(): item["score"] for item in sentiment_results}
 
@@ -117,8 +106,6 @@ class EOSAIProcessor:
                 "neutral":  round(scores_raw.get("neutral",  0) / total * 100, 1),
             }
             main_sentiment = max(sentiment_scores, key=sentiment_scores.get)
-
-            # 키워드 추출
             keywords = self._extract_keywords(summary)
 
             return {
@@ -139,9 +126,23 @@ class EOSAIProcessor:
             print(f"[AI ENGINE ERROR] {e}")
             return {"error": str(e)}
 
+    def analyze_and_save(self, text: str, ticker: str) -> dict:
+        result = self.process(text, ticker)
+        if "error" in result:
+            return result
+
+        try:
+            import requests as req
+            url = f"http://127.0.0.1:8000/api/stocks/{ticker}/analysis/"
+            req.post(url, json=result)
+            print(f"[DB 저장 완료] {ticker}")
+        except Exception as e:
+            print(f"[DB 저장 실패] {e}")
+
+        return result
+
 
 if __name__ == "__main__":
-    # 노이즈 섞인 실제 트윗 형태로 테스트
     test_tweet = "🚀 $TSLA surges 5%!! @elonmusk #Tesla #stocks https://t.co/abc123 Strong earnings report beats Wall Street expectations. Investors are optimistic about growth outlook."
 
     processor = EOSAIProcessor()
