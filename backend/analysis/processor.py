@@ -157,3 +157,5 @@ if __name__ == "__main__":
     print(f"▶ keywords: {result['keywords']}")
     print(f"▶ analyzed_at: {result['analyzed_at']}")
     print("="*50)
+    # 백엔드 POST 테스트
+    processor.analyze_and_save(test_tweet, ticker="TSLA")
