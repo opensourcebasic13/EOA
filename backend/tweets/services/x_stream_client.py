@@ -31,7 +31,8 @@ def get_headers():
 
 
 def build_query(ticker: str, name: str) -> str:
-    return f'(${ticker} OR {ticker} OR "{name}") lang:en -is:retweet'
+    # 리트윗 30개 이상인 트윗만 가져오도록 설정
+    return f'(${ticker} OR {ticker} OR "{name}") min_retweets:30 lang:en -is:retweet'
 
 
 def fetch_recent_posts(ticker: str, name: str, max_results: int = 10) -> list[dict]:

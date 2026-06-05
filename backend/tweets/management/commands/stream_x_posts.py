@@ -30,11 +30,34 @@ class Command(BaseCommand):
             help="X API를 호출하지 않고 샘플 게시글을 저장합니다.",
         )
 
+        parser.add_argument(
+            "--ticker",
+            type=str,
+            default="",
+            help="특정 종목만 수집합니다. 예: --ticker TSLA",
+        )
+
     def handle(self, *args, **options):
         max_count = options["max_count"]
+        max_count = max(10, min(max_count, 100))
         use_sample = options["sample"]
+        target_ticker = options["ticker"].upper().strip()
 
-        for item in SUPPORTED_STOCKS:
+        target_stocks = SUPPORTED_STOCKS
+
+        if target_ticker:
+            target_stocks = [
+                item for item in SUPPORTED_STOCKS
+                if item["ticker"] == target_ticker
+            ]
+
+        if not target_stocks:
+            self.stdout.write(
+                self.style.WARNING(f"{target_ticker} 지원하지 않는 종목입니다.")
+            )
+            return
+
+        for item in target_stocks:
             ticker = item["ticker"]
             name = item["name"]
 
@@ -43,30 +66,67 @@ class Command(BaseCommand):
             try:
                 stock = Stock.objects.get(ticker=ticker)
             except Stock.DoesNotExist:
-                self.stdout.write(self.style.WARNING(f"{ticker} 종목이 DB에 없습니다."))
+                self.stdout.write(
+                    self.style.WARNING(f"{ticker} 종목이 DB에 없습니다.")
+                )
                 continue
 
             if use_sample:
+                self.stdout.write(
+                    self.style.WARNING(f"{ticker} 샘플 게시글을 저장합니다.")
+                )
                 posts = build_sample_posts(ticker, name)
             else:
                 try:
-                    posts = fetch_recent_posts(ticker, name, max_results=max_count)
+                    posts = fetch_recent_posts(
+                        ticker,
+                        name,
+                        max_results=max_count,
+                    )
+
+                    self.stdout.write(
+                        self.style.SUCCESS(
+                            f"{ticker} 실제 X API 데이터 수집 성공: {len(posts)}개"
+                        )
+                    )
+
+                    if not posts:
+                        self.stdout.write(
+                            self.style.WARNING(
+                                f"{ticker} 수집 결과가 없어 샘플 게시글을 저장합니다."
+                            )
+                        )
+                        posts = build_sample_posts(ticker, name)
+
                 except HTTPError as error:
-                    status_code = error.response.status_code if error.response else None
+                    status_code = (
+                        error.response.status_code
+                        if error.response is not None
+                        else None
+                    )
 
                     if status_code == 402:
-                        self.stdout.write(self.style.WARNING(
-                            f"{ticker} X API 402 Payment Required: 현재 계정/크레딧에서 recent search가 제한되었습니다."
-                        ))
-                        self.stdout.write(self.style.WARNING(
-                            f"{ticker} 발표/개발용 샘플 게시글을 대신 저장합니다."
-                        ))
+                        self.stdout.write(
+                            self.style.WARNING(
+                                f"{ticker} X API 402 Payment Required: 현재 계정/크레딧에서 recent search가 제한되었습니다."
+                            )
+                        )
+                        self.stdout.write(
+                            self.style.WARNING(
+                                f"{ticker} 발표/개발용 샘플 게시글을 대신 저장합니다."
+                            )
+                        )
                         posts = build_sample_posts(ticker, name)
                     else:
-                        self.stdout.write(self.style.WARNING(f"{ticker} X API 오류: {error}"))
+                        self.stdout.write(
+                            self.style.WARNING(f"{ticker} X API 오류: {error}")
+                        )
                         continue
+
                 except Exception as error:
-                    self.stdout.write(self.style.WARNING(f"{ticker} X 수집 실패: {error}"))
+                    self.stdout.write(
+                        self.style.WARNING(f"{ticker} X 수집 실패: {error}")
+                    )
                     posts = build_sample_posts(ticker, name)
 
             self.save_posts(stock, ticker, posts)
@@ -91,7 +151,7 @@ class Command(BaseCommand):
                 author_handle=post.get("author_handle", "@x_user"),
                 content=post.get("content", ""),
                 hashtags=[ticker, stock.name],
-                sentiment="neutral",
+                sentiment=post.get("sentiment", "neutral"),
                 like_count=post.get("like_count", 0),
                 reply_count=post.get("reply_count", 0),
                 repost_count=post.get("repost_count", 0),
@@ -107,6 +167,6 @@ class Command(BaseCommand):
             },
         )
 
-        self.stdout.write(self.style.SUCCESS(
-            f"{ticker} 게시글 {len(posts)}개 저장 완료"
-        ))
+        self.stdout.write(
+            self.style.SUCCESS(f"{ticker} 게시글 {len(posts)}개 저장 완료")
+        )

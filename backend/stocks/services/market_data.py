@@ -1,3 +1,4 @@
+import math
 import yfinance as yf
 
 
@@ -8,34 +9,63 @@ def fetch_stock_quote(ticker: str) -> dict:
     previous_close = 0
     volume = 0
 
-    # 1차 시도: fast_info에서 현재가 가져오기
+    # 1차 시도: 정규장 기준 값 사용
     try:
-        fast_info = stock.fast_info
+        info = stock.info
 
         current_price = (
-            fast_info.get("last_price")
-            or fast_info.get("lastPrice")
-            or fast_info.get("regular_market_price")
+            info.get("regularMarketPrice")
+            or info.get("currentPrice")
             or 0
         )
 
         previous_close = (
-            fast_info.get("previous_close")
-            or fast_info.get("previousClose")
+            info.get("regularMarketPreviousClose")
+            or info.get("previousClose")
             or 0
         )
 
         volume = (
-            fast_info.get("last_volume")
-            or fast_info.get("lastVolume")
+            info.get("regularMarketVolume")
+            or info.get("volume")
             or 0
         )
 
     except Exception:
         pass
 
-    # 2차 시도: fast_info가 비어 있으면 최근 5일 종가 사용
-    if not current_price or current_price == 0:
+    # 2차 시도: info가 실패하면 fast_info 사용
+    if not current_price or current_price == 0 or not previous_close or previous_close == 0:
+        try:
+            fast_info = stock.fast_info
+
+            current_price = (
+                fast_info.get("last_price")
+                or fast_info.get("lastPrice")
+                or fast_info.get("regular_market_price")
+                or current_price
+                or 0
+            )
+
+            previous_close = (
+                fast_info.get("previous_close")
+                or fast_info.get("previousClose")
+                or previous_close
+                or 0
+            )
+
+            volume = (
+                fast_info.get("last_volume")
+                or fast_info.get("lastVolume")
+                or volume
+                or 0
+            )
+
+        except Exception:
+            pass
+
+    # 3차 시도: 그래도 안 되면 최근 종가 기준
+    if not current_price or current_price == 0 or not previous_close or previous_close == 0:
         history = stock.history(period="5d", interval="1d")
 
         if not history.empty:
@@ -68,7 +98,6 @@ def fetch_stock_quote(ticker: str) -> dict:
         "currency": "USD",
     }
 
-
 def fetch_stock_chart(ticker: str, period: str = "7d", interval: str = "1d") -> list[dict]:
     stock = yf.Ticker(ticker)
     history = stock.history(period=period, interval=interval)
@@ -79,10 +108,29 @@ def fetch_stock_chart(ticker: str, period: str = "7d", interval: str = "1d") -> 
         return chart_points
 
     for index, row in history.iterrows():
+        close_price = row["Close"]
+        volume = row["Volume"]
+
+        if close_price is None:
+            continue
+
+        close_price = float(close_price)
+
+        if math.isnan(close_price):
+            continue
+
+        if volume is None:
+            volume = 0
+
+        try:
+            volume = int(volume)
+        except Exception:
+            volume = 0
+
         chart_points.append({
             "time": index.to_pydatetime(),
-            "price": round(float(row["Close"]), 2),
-            "volume": int(row["Volume"] or 0),
+            "price": round(close_price, 2),
+            "volume": volume,
         })
 
     return chart_points
