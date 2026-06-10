@@ -11,3 +11,4 @@ def health_check(request):
             "status": "ok"
         }
     })
+

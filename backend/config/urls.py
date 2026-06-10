@@ -10,6 +10,7 @@ urlpatterns = [
     # API 문서
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
+    path("api/users/", include("users.urls")),
 
     # 우리가 만든 API
     path("api/watchlist/", watchlist_stocks),
@@ -18,4 +19,10 @@ urlpatterns = [
 
     path("", health_check),
     path("api/health/", health_check),
+    path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
+    path(
+      "api/schema/swagger-ui/",
+     SpectacularSwaggerView.as_view(url_name="schema"),
+     name="swagger-ui",
+    ),
 ]

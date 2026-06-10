@@ -1,8 +1,11 @@
+import json
 import os
 import requests
+import re
 
 
-X_RECENT_SEARCH_URL = "https://api.x.com/2/tweets/search/recent"
+X_STREAM_URL = "https://api.x.com/2/tweets/search/stream"
+X_RULES_URL = "https://api.x.com/2/tweets/search/stream/rules"
 
 
 SUPPORTED_STOCKS = [
@@ -30,83 +33,91 @@ def get_headers():
     }
 
 
-def build_query(ticker: str, name: str) -> str:
-    # 리트윗 30개 이상인 트윗만 가져오도록 설정
-    return f'(${ticker} OR {ticker} OR "{name}") min_retweets:30 lang:en -is:retweet'
+def get_stream_rules():
+    response = requests.get(
+        X_RULES_URL,
+        headers=get_headers(),
+        timeout=15,
+    )
+    response.raise_for_status()
+    return response.json()
 
 
-def fetch_recent_posts(ticker: str, name: str, max_results: int = 10) -> list[dict]:
+def connect_stream():
     params = {
-        "query": build_query(ticker, name),
-        "max_results": max_results,
         "tweet.fields": "created_at,public_metrics,lang",
         "expansions": "author_id",
         "user.fields": "username,name",
     }
 
     response = requests.get(
-        X_RECENT_SEARCH_URL,
+        X_STREAM_URL,
         headers=get_headers(),
         params=params,
-        timeout=15,
+        stream=True,
+        timeout=90,
     )
 
     response.raise_for_status()
-    payload = response.json()
 
-    users = {
-        user["id"]: user
-        for user in payload.get("includes", {}).get("users", [])
+    for line in response.iter_lines():
+        if not line:
+            continue
+
+        yield json.loads(line.decode("utf-8"))
+
+
+def extract_ticker_from_payload(payload):
+    text = payload.get("data", {}).get("text", "")
+    text_lower = text.lower()
+
+    supported_tickers = {
+        stock["ticker"].upper()
+        for stock in SUPPORTED_STOCKS
     }
 
-    posts = []
+    # 1. matching_rules tag가 진짜 티커일 때만 사용
+    matching_rules = payload.get("matching_rules", [])
 
-    for item in payload.get("data", []):
-        metrics = item.get("public_metrics", {})
-        author = users.get(item.get("author_id"), {})
+    if matching_rules:
+        tag = matching_rules[0].get("tag", "").upper().strip()
 
-        username = author.get("username", "x_user")
+        if tag in supported_tickers:
+            return tag
 
-        posts.append({
-            "content": item.get("text", ""),
-            "posted_at": item.get("created_at"),
-            "author_name": author.get("name", "X User"),
-            "author_handle": f"@{username}",
-            "like_count": metrics.get("like_count", 0),
-            "reply_count": metrics.get("reply_count", 0),
-            "repost_count": metrics.get("retweet_count", 0),
-        })
+    # 2. tag가 "US STOCKS 10" 같은 그룹명이면 트윗 본문에서 티커/종목명 추출
+    for stock in SUPPORTED_STOCKS:
+        ticker = stock["ticker"]
+        ticker_lower = ticker.lower()
+        name_lower = stock["name"].lower()
 
-    return posts
+        # $TSLA, TSLA 같은 패턴 탐지
+        ticker_pattern = rf"(?<![A-Za-z0-9])\$?{re.escape(ticker_lower)}(?![A-Za-z0-9])"
+
+        if re.search(ticker_pattern, text_lower):
+            return ticker
+
+        # Tesla, NVIDIA 같은 회사명 탐지
+        if name_lower in text_lower:
+            return ticker
+
+    return None
 
 
-def build_sample_posts(ticker: str, name: str) -> list[dict]:
-    return [
-        {
-            "content": f"{name} is gaining attention as investors discuss recent momentum and market expectations.",
-            "posted_at": None,
-            "author_name": "X Sample User",
-            "author_handle": "@x_sample",
-            "like_count": 512,
-            "reply_count": 34,
-            "repost_count": 128,
-        },
-        {
-            "content": f"{ticker} is being mentioned frequently with AI, earnings, and growth-related keywords today.",
-            "posted_at": None,
-            "author_name": "Market Watcher",
-            "author_handle": "@market_watcher",
-            "like_count": 401,
-            "reply_count": 28,
-            "repost_count": 96,
-        },
-        {
-            "content": f"Some traders remain cautious about {ticker} due to valuation and short-term volatility.",
-            "posted_at": None,
-            "author_name": "Risk Monitor",
-            "author_handle": "@risk_monitor",
-            "like_count": 193,
-            "reply_count": 51,
-            "repost_count": 62,
-        },
-    ]
+def extract_author_info(payload):
+    includes = payload.get("includes", {})
+    users = includes.get("users", [])
+
+    if not users:
+        return {
+            "author_name": "X User",
+            "author_handle": "@x_user",
+        }
+
+    user = users[0]
+    username = user.get("username", "x_user")
+
+    return {
+        "author_name": user.get("name", "X User"),
+        "author_handle": f"@{username}",
+    }

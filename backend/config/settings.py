@@ -45,6 +45,7 @@ INSTALLED_APPS = [
 
     # 외부 라이브러리
     "rest_framework",
+    "rest_framework.authtoken",
     "corsheaders",
     "drf_spectacular",
 
@@ -156,3 +157,16 @@ SPECTACULAR_SETTINGS = {
     "DESCRIPTION": "X 기반 주식 트렌드 분석 서비스 API 문서",
     "VERSION": "1.0.0",
 }
+
+
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework.authentication.TokenAuthentication",
+        "rest_framework.authentication.SessionAuthentication",
+    ],
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.AllowAny",
+    ],
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+}
+

@@ -15,6 +15,7 @@ from .serializers import (
     StockAiAnalysisSerializer,
 )
 
+
 @api_view(["GET"])
 def trending_stocks(request):
     stats = list(
@@ -55,21 +56,81 @@ def search_stocks(request):
     return Response(serializer.data)
 
 
-@api_view(["GET"])
+@api_view(["GET", "POST", "DELETE"])
 def watchlist_stocks(request):
-    if request.user.is_authenticated:
-        watchlists = Watchlist.objects.filter(user=request.user).select_related("stock")
-        stocks = [item.stock for item in watchlists]
-    else:
-        stats = StockTrendStat.objects.select_related("stock").all()[:5]
-        stocks = [stat.stock for stat in stats]
+    # 관심 주식 조회
+    if request.method == "GET":
+        if request.user.is_authenticated:
+            watchlists = Watchlist.objects.filter(user=request.user).select_related("stock")
+            stocks = [item.stock for item in watchlists]
+        else:
+            stats = StockTrendStat.objects.select_related("stock").all()[:5]
+            stocks = [stat.stock for stat in stats]
 
-        if not stocks:
-            stocks = Stock.objects.all()[:5]
+            if not stocks:
+                stocks = Stock.objects.all()[:5]
 
-    serializer = StockSummarySerializer(stocks, many=True)
+        serializer = StockSummarySerializer(stocks, many=True)
+        return Response(serializer.data)
 
-    return Response(serializer.data)
+    # 추가/삭제는 로그인 필요
+    if not request.user.is_authenticated:
+        return Response(
+            {
+                "success": False,
+                "message": "로그인이 필요합니다.",
+                "data": None,
+            },
+            status=status.HTTP_401_UNAUTHORIZED,
+        )
+
+    ticker = request.data.get("ticker", "").strip().upper()
+
+    if not ticker:
+        return Response(
+            {
+                "success": False,
+                "message": "ticker가 필요합니다.",
+                "data": None,
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    stock = get_object_or_404(Stock, ticker__iexact=ticker)
+
+    # 관심 주식 추가
+    if request.method == "POST":
+        Watchlist.objects.get_or_create(
+            user=request.user,
+            stock=stock,
+        )
+
+        return Response({
+            "success": True,
+            "message": f"{ticker}가 관심 주식에 추가되었습니다.",
+            "data": {
+                "ticker": stock.ticker,
+                "name": stock.name,
+                "market": stock.market,
+            },
+        })
+
+    # 관심 주식 삭제
+    if request.method == "DELETE":
+        Watchlist.objects.filter(
+            user=request.user,
+            stock=stock,
+        ).delete()
+
+        return Response({
+            "success": True,
+            "message": f"{ticker}가 관심 주식에서 삭제되었습니다.",
+            "data": {
+                "ticker": stock.ticker,
+                "name": stock.name,
+                "market": stock.market,
+            },
+        })
 
 
 @api_view(["GET"])
@@ -90,6 +151,7 @@ def stock_chart(request, ticker):
     serializer = StockChartPointSerializer(points, many=True)
 
     return Response(serializer.data)
+
 
 @api_view(["GET", "POST"])
 def stock_ai_analysis(request, ticker):
@@ -144,6 +206,8 @@ def stock_ai_analysis(request, ticker):
         },
         status=status.HTTP_201_CREATED,
     )
+
+
 @api_view(["GET"])
 def stock_overview(request, ticker):
     stock = get_object_or_404(Stock, ticker__iexact=ticker)
