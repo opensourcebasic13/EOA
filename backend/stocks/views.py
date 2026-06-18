@@ -21,7 +21,7 @@ def trending_stocks(request):
     stats = list(
         StockTrendStat.objects
         .select_related("stock")
-        .all()[:10]
+        .all()[:20]
     )
 
     rank_map = {
@@ -49,7 +49,7 @@ def search_stocks(request):
         Q(name__icontains=query) |
         Q(ticker__icontains=query) |
         Q(market__icontains=query)
-    )[:10]
+    )[:20]
 
     serializer = StockSummarySerializer(stocks, many=True)
 
@@ -229,7 +229,7 @@ def stock_overview(request, ticker):
         "-like_count",
         "-repost_count",
         "-posted_at"
-    )[:10]
+    )[:20]
 
     try:
         ai_analysis = stock.ai_analysis

@@ -1,9 +1,11 @@
 import time
+from datetime import timedelta
 
 from django.core.management.base import BaseCommand
 
-from stocks.models import Stock, StockPrice, StockChartPoint
+from stocks.models import Stock, StockPrice, StockChartPoint, StockTrendStat
 from stocks.services.market_data import fetch_stock_quote, fetch_stock_chart
+from tweets.models import TweetPost
 
 
 SUPPORTED_STOCKS = [
@@ -17,11 +19,21 @@ SUPPORTED_STOCKS = [
     {"ticker": "AMD", "name": "AMD", "market": "NASDAQ"},
     {"ticker": "PLTR", "name": "Palantir", "market": "NYSE"},
     {"ticker": "NFLX", "name": "Netflix", "market": "NASDAQ"},
+    {"ticker": "SPCX", "name": "SPCX", "market": "NASDAQ"},
+    {"ticker": "AVGO", "name": "Broadcom", "market": "NASDAQ"},
+    {"ticker": "TSM", "name": "Taiwan Semiconductor", "market": "NYSE"},
+    {"ticker": "ASML", "name": "ASML Holding", "market": "NASDAQ"},
+    {"ticker": "MU", "name": "Micron Technology", "market": "NASDAQ"},
+    {"ticker": "QCOM", "name": "Qualcomm", "market": "NASDAQ"},
+    {"ticker": "INTC", "name": "Intel", "market": "NASDAQ"},
+    {"ticker": "AMAT", "name": "Applied Materials", "market": "NASDAQ"},
+    {"ticker": "LRCX", "name": "Lam Research", "market": "NASDAQ"},
+    {"ticker": "KLAC", "name": "KLA", "market": "NASDAQ"},
 ]
 
 
 class Command(BaseCommand):
-    help = "yfinance를 사용해 해외주식 10개의 현재가와 차트 데이터를 갱신합니다."
+    help = "yfinance를 사용해 해외주식의 현재가, 차트 데이터, 1시간 주가 등락률을 갱신합니다."
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -33,8 +45,8 @@ class Command(BaseCommand):
         parser.add_argument(
             "--interval",
             type=int,
-            default=10,
-            help="자동 갱신 간격입니다. 단위는 분입니다. 기본값은 10분입니다.",
+            default=1,
+            help="자동 갱신 간격입니다. 단위는 분입니다. 기본값은 1분입니다.",
         )
 
     def handle(self, *args, **options):
@@ -76,6 +88,7 @@ class Command(BaseCommand):
 
             self.update_price(stock, ticker)
             self.update_chart(stock, ticker)
+            self.update_one_hour_change_rate(stock)
 
             self.stdout.write(self.style.SUCCESS(f"{ticker} 주식 데이터 갱신 완료"))
 
@@ -133,3 +146,58 @@ class Command(BaseCommand):
 
         except Exception as error:
             self.stdout.write(self.style.WARNING(f"{ticker} 차트 갱신 실패: {error}"))
+
+    def update_one_hour_change_rate(self, stock):
+        latest_point = (
+            StockChartPoint.objects
+            .filter(stock=stock)
+            .order_by("-time")
+            .first()
+        )
+
+        if latest_point is None:
+            self.stdout.write(self.style.WARNING(
+                f"{stock.ticker} 1시간 등락률 계산 실패: 최신 차트 데이터 없음"
+            ))
+            return
+
+        one_hour_ago = latest_point.time - timedelta(hours=1)
+
+        past_point = (
+            StockChartPoint.objects
+            .filter(
+                stock=stock,
+                time__lte=one_hour_ago,
+            )
+            .order_by("-time")
+            .first()
+        )
+
+        if past_point is None:
+            one_hour_change_rate = 0
+        else:
+            latest_price = float(latest_point.price)
+            past_price = float(past_point.price)
+
+            if past_price == 0:
+                one_hour_change_rate = 0
+            else:
+                one_hour_change_rate = (
+                    (latest_price - past_price) / past_price
+                ) * 100
+
+        tweet_volume = TweetPost.objects.filter(stock=stock).count()
+
+        StockTrendStat.objects.update_or_create(
+            stock=stock,
+            defaults={
+                "tweet_volume": tweet_volume,
+                "one_hour_change_rate": round(one_hour_change_rate, 2),
+            },
+        )
+
+        self.stdout.write(
+            self.style.SUCCESS(
+                f"{stock.ticker} 1시간 주가 등락률 저장: {round(one_hour_change_rate, 2)}%"
+            )
+        )

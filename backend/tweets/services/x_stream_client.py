@@ -1,8 +1,12 @@
 import json
 import os
-import requests
 import re
+import requests
 
+from pathlib import Path
+from dotenv import load_dotenv
+BASE_DIR = Path(__file__).resolve().parents[2]
+load_dotenv(BASE_DIR / ".env")
 
 X_STREAM_URL = "https://api.x.com/2/tweets/search/stream"
 X_RULES_URL = "https://api.x.com/2/tweets/search/stream/rules"
@@ -19,17 +23,40 @@ SUPPORTED_STOCKS = [
     {"ticker": "AMD", "name": "AMD"},
     {"ticker": "PLTR", "name": "Palantir"},
     {"ticker": "NFLX", "name": "Netflix"},
+    {"ticker": "SPCX", "name": "SPCX"},
+    {"ticker": "AVGO", "name": "Broadcom"},
+    {"ticker": "TSM", "name": "Taiwan Semiconductor"},
+    {"ticker": "ASML", "name": "ASML Holding"},
+    {"ticker": "MU", "name": "Micron Technology"},
+    {"ticker": "QCOM", "name": "Qualcomm"},
+    {"ticker": "INTC", "name": "Intel"},
+    {"ticker": "AMAT", "name": "Applied Materials"},
+    {"ticker": "LRCX", "name": "Lam Research"},
+    {"ticker": "KLAC", "name": "KLA"},
 ]
 
 
 def get_headers():
-    bearer_token = os.getenv("X_BEARER_TOKEN", "").strip()
+    bearer_token = (
+        os.getenv("X_BEARER_TOKEN")
+        or os.getenv("TWITTER_BEARER_TOKEN")
+        or os.getenv("BEARER_TOKEN")
+        or ""
+    ).strip()
+
+    # 따옴표 제거
+    bearer_token = bearer_token.strip('"').strip("'")
+
+    # .env에 실수로 Bearer까지 넣은 경우 제거
+    if bearer_token.lower().startswith("bearer "):
+        bearer_token = bearer_token.split(" ", 1)[1].strip()
 
     if not bearer_token:
         raise ValueError("X_BEARER_TOKEN이 .env에 설정되어 있지 않습니다.")
 
     return {
         "Authorization": f"Bearer {bearer_token}",
+        "User-Agent": "EOA-X-Stream-Client",
     }
 
 
