@@ -380,7 +380,7 @@ function Dashboard({ token, user, onLogout }) {
                 </div>
 
                 <div className="ai-box">
-                  <h3>AI 요약 및 감정 분석</h3>
+                  <h3>AI 요약 및 투자 유형 분석 분석</h3>
 
                   {overview.ai_analysis ? (
                     <>
